@@ -4,6 +4,7 @@
 import random
 
 import redis
+from .logger import logger
 
 from .config import (
     REDIS_KEY,
@@ -131,3 +132,104 @@ class RedisClient:
         返回全部代理
         """
         return self.redis.zrangebyscore(REDIS_KEY, MIN_SCORE, MAX_SCORE)
+
+
+class MemoryDB:
+    """
+    代理池依赖了 Redis 数据库，使用了其`有序集合`的数据结构
+    （可按分数排序，key 值不能重复）
+    """
+    map = {}
+
+    def add_proxy(self, proxy, score=INIT_SCORE):
+        """
+        新增一个代理，初始化分数 INIT_SCORE < MAX_SCORE，确保在
+        运行完收集器后还没运行校验器就获取代理，导致获取到分数虽为 MAX_SCORE,
+        但实际上确是未经验证，不可用的代理
+
+        :param proxy: 新增代理
+        :param score: 初始化分数
+        """
+        if proxy not in self.map.keys():
+            self.map[proxy] = score
+
+    def reduce_proxy_score(self, proxy):
+        """
+        验证未通过，分数减一
+
+        :param proxy: 验证代理
+        """
+        score = self.map[proxy]
+        if score and score > MIN_SCORE:
+            self.map[proxy] = score - 1
+        else:
+            self.map.pop(proxy)
+
+    def increase_proxy_score(self, proxy):
+        """
+        验证通过，分数加一
+
+        :param proxy: 验证代理
+        """
+        score = self.map[proxy]
+        if score and score < MAX_SCORE:
+            self.map[proxy] = score + 1
+
+    def pop_proxy(self):
+        """
+        返回一个代理
+        """
+        # 第一次尝试取分数最高，也就是最新可用的代理
+        d = self.map
+        sorted(d.items(), key=lambda item: item[1], reverse=True)
+        first_chance = [i for i in d.keys()][0]
+        return first_chance
+
+    def get_proxies(self, count=1):
+        """
+        返回指定数量代理，分数由高到低排序
+
+        :param count: 代理数量
+        """
+        d = self.map
+        sorted(d.items(), key=lambda item: item[1], reverse=True)
+        proxies = list(d.keys())[0:count-1]
+        for proxy in proxies:
+            yield proxy
+
+    def count_all_proxies(self):
+        """
+        返回所有代理总数
+        """
+        return len(self.map)
+
+    def count_score_proxies(self, score):
+        """
+        返回指定分数代理总数
+
+        :param score: 代理分数
+        """
+        if 0 <= score <= 10:
+            return len({k: v for k, v in self.map.items() if v == score})
+        return -1
+
+    def clear_proxies(self, score):
+        """
+        删除分数小于等于 score 的代理
+        """
+        if 0 <= score <= 10:
+            try:
+                for k, v in self.map.items():
+                    if v < score:
+                        self.map.pop(k)
+            except RuntimeError:
+                logger.warning('clear failed. Dict may change.')
+            return True
+        return False
+
+    def all_proxies(self):
+        """
+        返回全部代理
+        """
+        return list(self.map.keys())
+

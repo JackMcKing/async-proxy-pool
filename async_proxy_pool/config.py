@@ -6,6 +6,9 @@ REQUEST_TIMEOUT = 15
 # 请求延迟时间（秒）
 REQUEST_DELAY = 0
 
+# db形式（memory或redis）
+DB_TYPE = 'memory'
+
 # redis 地址
 REDIS_HOST = "localhost"
 # redis 端口
@@ -34,7 +37,7 @@ SERVER_ACCESS_LOG = True
 # 批量测试数量
 VALIDATOR_BATCH_COUNT = 256
 # 校验器测试网站，可以定向改为自己想爬取的网站，如新浪，知乎等
-VALIDATOR_BASE_URL = "http://baidu.com"
+VALIDATOR_BASE_URL = "https://www.bilibili.com/ranking"
 # 校验器循环周期（分钟）
 VALIDATOR_RUN_CYCLE = 15
 

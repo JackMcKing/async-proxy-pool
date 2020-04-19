@@ -5,12 +5,18 @@ import re
 
 import pyquery
 
+from .config import DB_TYPE
 from .utils import requests
-from .database import RedisClient
+from .database import RedisClient, MemoryDB
 from .logger import logger
 
 
-redis_conn = RedisClient()
+db_type = DB_TYPE
+if db_type == 'redis':
+    redis_conn = RedisClient()
+elif db_type == 'memory':
+    memorydb = MemoryDB()
+
 all_funcs = []
 
 
@@ -31,7 +37,10 @@ class Crawler:
         logger.info("Crawler working...")
         for func in all_funcs:
             for proxy in func():
-                redis_conn.add_proxy(proxy)
+                if db_type == 'redis':
+                    redis_conn.add_proxy(proxy)
+                elif db_type == 'memory':
+                    memorydb.add_proxy(proxy)
                 logger.info("Crawler √ {}".format(proxy))
         logger.info("Crawler resting...")
 
